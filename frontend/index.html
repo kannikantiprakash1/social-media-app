@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Social Media</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    header { background: #1877f2; color: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; }
+    nav { display: flex; gap: 10px; margin-top: 15px; }
+    button { background: rgba(255,255,255,0.2); color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
+    button:hover { background: rgba(255,255,255,0.4); }
+    .logout-btn { background: #e74c3c; }
+    .logout-btn:hover { background: #c0392b; }
+    .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+    input, textarea { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+    .btn-primary { background: #1877f2; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+    .btn-primary:hover { background: #0a66c2; }
+    .error { color: red; padding: 10px; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>👥 Social Media App</h1>
+      <nav>
+        <button id="homeBtn" onclick="showFeed()" style="display:none;">🏠 Home</button>
+        <button id="profileBtn" onclick="showProfile()" style="display:none;">👤 Profile</button>
+        <button id="logoutBtn" class="logout-btn" onclick="logout()" style="display:none;">🚪 Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="content"></div>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:3000/api';
+    let token = null;
+    let userId = null;
+
+    function init() {
+      token = localStorage.getItem('token');
+      userId = localStorage.getItem('userId');
+      
+      if (token && userId) {
+        showFeed();
+      } else {
+        showLogin();
+      }
+    }
+
+    function updateUI() {
+      const loggedIn = !!token;
+      document.getElementById('homeBtn').style.display = loggedIn ? 'inline' : 'none';
+      document.getElementById('profileBtn').style.display = loggedIn ? 'inline' : 'none';
+      document.getElementById('logoutBtn').style.display = loggedIn ? 'inline' : 'none';
+    }
+
+    function showLogin() {
+      updateUI();
+      document.getElementById('content').innerHTML = `
+        <div class="card" style="max-width: 400px; margin: 50px auto;">
+          <h2>🔓 Login</h2>
+          <input type="email" id="email" placeholder="Email" value="alice@example.com">
+          <input type="password" id="password" placeholder="Password" value="password123">
+          <button class="btn-primary" onclick="login()">Login</button>
+          <p style="margin-top: 15px;">Don't have account? <a href="#" onclick="showSignup(); return false;">Sign up</a></p>
+        </div>
+      `;
+    }
+
+    function showSignup() {
+      updateUI();
+      document.getElementById('content').innerHTML = `
+        <div class="card" style="max-width: 400px; margin: 50px auto;">
+          <h2>📝 Sign Up</h2>
+          <input type="text" id="username" placeholder="Username">
+          <input type="email" id="email" placeholder="Email">
+          <input type="password" id="password" placeholder="Password">
+          <button class="btn-primary" onclick="signup()">Sign Up</button>
+          <p style="margin-top: 15px;"><a href="#" onclick="showLogin(); return false;">Already have account?</a></p>
+        </div>
+      `;
+    }
+
+    async function login() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch(API_URL + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Login failed');
+
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('userId', data.userId);
+        token = data.token;
+        userId = data.userId;
+
+        showFeed();
+      } catch (error) {
+        alert('Login error: ' + error.message);
+      }
+    }
+
+    async function signup() {
+      const username = document.getElementById('username').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch(API_URL + '/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email, password })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Signup failed');
+
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('userId', data.userId);
+        token = data.token;
+        userId = data.userId;
+
+        showFeed();
+      } catch (error) {
+        alert('Signup error: ' + error.message);
+      }
+    }
+
+    function logout() {
+      localStorage.clear();
+      token = null;
+      userId = null;
+      showLogin();
+    }
+
+    function showFeed() {
+      updateUI();
+      document.getElementById('content').innerHTML = `
+        <div class="card">
+          <h2>📝 Create Post</h2>
+          <input type="text" id="title" placeholder="Post title">
+          <textarea id="content" placeholder="What's on your mind?" rows="4"></textarea>
+          <button class="btn-primary" onclick="createPost()">Post</button>
+        </div>
+        <div id="posts"></div>
+      `;
+      
+      loadPosts();
+    }
+
+    async function loadPosts() {
+      try {
+        const res = await fetch(API_URL + '/posts/feed', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        
+        const posts = await res.json();
+        let html = '';
+
+        if (Array.isArray(posts) && posts.length > 0) {
+          posts.forEach(p => {
+            html += `
+              <div class="card">
+                <h3>${p.username}</h3>
+                <h4>${p.title}</h4>
+                <p>${p.content}</p>
+                <button class="btn-primary" onclick="likePost(${p.id})">❤️ Like</button>
+              </div>
+            `;
+          });
+        } else {
+          html = '<div class="card"><p>No posts yet</p></div>';
+        }
+
+        document.getElementById('posts').innerHTML = html;
+      } catch (error) {
+        document.getElementById('posts').innerHTML = '<div class="error">Error loading posts</div>';
+      }
+    }
+
+    async function createPost() {
+      const title = document.getElementById('title').value;
+      const content = document.getElementById('content').value;
+
+      if (!title || !content) {
+        alert('Fill in all fields');
+        return;
+      }
+
+      try {
+        const res = await fetch(API_URL + '/posts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({ title, content })
+        });
+
+        if (!res.ok) throw new Error('Failed to create post');
+
+        document.getElementById('title').value = '';
+        document.getElementById('content').value = '';
+        loadPosts();
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    async function likePost(postId) {
+      try {
+        await fetch(API_URL + '/posts/' + postId + '/like', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        loadPosts();
+      } catch (error) {
+        console.error('Error liking post:', error);
+      }
+    }
+
+    function showProfile() {
+      document.getElementById('content').innerHTML = '<div class="card"><p>Profile coming soon!</p></div>';
+    }
+
+    init();
+  </script>
+</body>
+</html>
